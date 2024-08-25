@@ -8,54 +8,51 @@ import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
+// Create a Supabase client instance
 function supabase() {
     return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
+// Fetch the user's wallet information using their access token
 async function getUserWallet(access_token) {
-
-    const { data, error } = await supabase().auth.getUser(access_token);
-
-    if (error) {
-        return {
-            error: true,
-            message: error
+    try {
+        // Fetch user data from Supabase using the access token
+        const { data, error } = await supabase().auth.getUser(access_token);
+        if (error) {
+            throw new Error('Failed to fetch user from Supabase');
         }
-    }
 
-    const { data: existingUser, error: fetchError } = await supabase()
-        .from('wallets')
-        .select('*')
-        .eq('user_id', data.user.id)
-        .single();
+        // Fetch wallet data associated with the user
+        const { data: existingUser, error: fetchError } = await supabase()
+            .from('wallets')
+            .select('*')
+            .eq('user_id', data.user.id)
+            .single();
 
-    if (fetchError) {
-        return {
-            error: true,
-            message: 'Invalid access_token'
+        if (fetchError) {
+            throw new Error('Invalid access token or user not found');
         }
-    }
 
-    return {
-        error: false,
-        message: {
-            wallet: existingUser.wallet
-        }
+        // Return the user's wallet address
+        return { error: false, wallet: existingUser.wallet };
+    } catch (err) {
+        return { error: true, message: err.message };
     }
 }
 
 const router = Router();
 
-router.get('/', async (req, res) => {
-    res.status(200).json({
-        message: 'Hello!'
-    });
+// Default route: Returns a simple hello message
+router.get('/', (req, res) => {
+    res.status(200).json({ message: 'Hello!' });
 });
 
-router.get('/auth/welcome', async (req, res) => {
-    res.sendFile(path.resolve('welcome.html')); // Use path.resolve for correct path resolution
+// Serve a welcome HTML page
+router.get('/auth/welcome', (req, res) => {
+    res.sendFile(path.resolve('welcome.html')); // Serve the welcome page
 });
 
+// Verify a user's email using a token
 router.post('/auth/verify', async (req, res) => {
     const { token } = req.body;
 
@@ -63,157 +60,197 @@ router.post('/auth/verify', async (req, res) => {
         return res.status(400).json({ error: 'Verification token is required' });
     }
 
-    const { data, error } = await supabase().auth.getUser(token);
+    try {
+        const { data, error } = await supabase().auth.getUser(token);
+        if (error) throw new Error(error.message);
 
-    if (error) {
-        return res.status(400).json({ error: error.message });
+        res.status(200).json({ message: 'Email verified successfully!', user: data });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
     }
-
-    res.status(200).json({ message: 'Email verified successfully!', user: data });
 });
 
+// Sign up a new user with email and password
 router.post('/auth/signup', async (req, res) => {
     const { email, password } = req.body;
-    const { data, error } = await supabase().auth.signUp({
-        email: email,
-        password: password
-    });
 
-    if (error) return res.status(400).json({ error: error.message });
+    try {
+        const { data, error } = await supabase().auth.signUp({ email, password });
+        if (error) throw new Error(error.message);
 
-    res.status(200).json({ user: data.user });
+        res.status(200).json({ user: data.user });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
 });
 
+// Resend a new OTP to the user
 router.post('/auth/newOTP', async (req, res) => {
     const { email } = req.body;
-    const { error } = await supabase().auth.resend({
-        type: 'signup',
-        email: email
-    });
 
-    if (error) return res.status(400).json({ error: error.message });
+    try {
+        const { error } = await supabase().auth.resend({ type: 'signup', email });
+        if (error) throw new Error(error.message);
 
-    res.status(200).json({ message: 'New OTP sent', error: error });
+        res.status(200).json({ message: 'New OTP sent' });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
 });
 
+// Sign in a user and manage wallet creation if needed
 router.post('/auth/signin', async (req, res) => {
     const { email, password } = req.body;
 
-    const { data, error } = await supabase().auth.signInWithPassword({ email, password });
+    try {
+        // Sign in the user with Supabase
+        const { data, error } = await supabase().auth.signInWithPassword({ email, password });
+        if (error) throw new Error(error.message);
 
-    if (error) return res.status(400).json({ error: error.message });
+        // Check if the user already has a wallet in the database
+        const { data: existingUser, error: fetchError } = await supabase()
+            .from('wallets')
+            .select('*')
+            .eq('user_id', data.user.id)
+            .single();
 
-    const { data: existingUser, error: fetchError } = await supabase()
-        .from('wallets')
-        .select('*')
-        .eq('user_id', data.user.id)
-        .single();
+        if (fetchError && fetchError.details === 'The result contains 0 rows') {
+            // If no wallet found, create a new wallet via Thirdweb API
+            const wallet = await axios.post(
+                `${process.env.THIRDWEB_URL}/backend-wallet/create`,
+                { label: data.user.id },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.THIRDWEB_BEARER_TOKEN}`,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
 
-    if (fetchError && fetchError.details === 'The result contains 0 rows') {
+            if (wallet.data.result.status === 'success') {
+                // Insert the new wallet into Supabase
+                const { error: insertError } = await supabase().from('wallets').insert([{
+                    user_id: data.user.id,
+                    email: data.user.email,
+                    wallet: wallet.data.result.walletAddress,
+                }]);
 
-        const wallet = await axios.request({
-            method: 'post',
-            url: process.env.THIRDWEB_URL + '/backend-wallet/create',
-            headers: {
-                'Authorization': 'Bearer ' + process.env.THIRDWEB_BEARER_TOKEN,
-                'Content-Type': 'application/json'
-            },
-            data: JSON.stringify({
-                label: data.user.id
-            })
-        });
+                if (insertError) {
+                    throw new Error('Error creating user wallet on Supabase');
+                }
 
-        if (wallet.data.result.status === 'success') {
-
-            const { error: insertError } = await supabase().from('wallets').insert([{
-                user_id: data.user.id,
-                email: data.user.email,
-                wallet: wallet.data.result.walletAddress
-            }]);
-
-            if (insertError) {
-                return res.status(500).json({ error: 'Error creating user wallet on Supabase', message: insertError });
+                data.user.wallet = wallet.data.result.walletAddress;
+            } else {
+                throw new Error('Error creating user wallet on Thirdweb');
             }
-
-            data.user.wallet = existingUser?.wallet || wallet.data.result.walletAddress;
         } else {
-            return res.status(500).json({ error: 'Error creating user wallet on Thirdweb' });
+            // If wallet exists, use the existing wallet
+            data.user.wallet = existingUser.wallet;
         }
-    } else {
-        data.user.wallet = existingUser.wallet;
+
+        res.status(200).json(data);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
     }
-    res.status(200).json(data);
 });
 
+// Retrieve the user's wallet address based on their access token
 router.get('/wallet/getAddress', async (req, res) => {
     const { access_token } = req.headers;
+
     if (!access_token) {
         return res.status(400).json({ error: 'access_token in the header request is required' });
     }
 
-    const { error, message } = await getUserWallet(access_token);
-
+    const { error, wallet, message } = await getUserWallet(access_token);
     if (error) {
-        return res.status(400).json(message);
-    } else {
-        return res.status(200).json(message);
+        return res.status(400).json({ error: message });
+    }
+
+    return res.status(200).json({ wallet });
+});
+
+// Sign a transaction using the user's wallet
+router.post('/wallet/signTransaction', async (req, res) => {
+    const { access_token } = req.headers;
+    const { transaction } = req.body;
+
+    if (!access_token) {
+        return res.status(400).json({ error: 'access_token in the header request is required' });
+    }
+
+    if (!transaction) {
+        return res.status(400).json({ error: 'transaction in the body request is required' });
+    }
+
+    try {
+        const { error, wallet, message } = await getUserWallet(access_token);
+        if (error) throw new Error(message);
+
+        const signedTransaction = await axios.post(
+            `${process.env.THIRDWEB_URL}/backend-wallet/sign-transaction`,
+            { transaction },
+            {
+                headers: {
+                    'x-backend-wallet-address': wallet,
+                    'x-idempotency-key': `dsigner_${wallet}_${transaction.nonce}`,
+                    'Authorization': `Bearer ${process.env.THIRDWEB_BEARER_TOKEN}`,
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+
+        res.status(200).json({ signedTransaction: signedTransaction.data.result });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
     }
 });
 
-router.post('/wallet/signTransaction', async (req, res) => {
-
-});
-
+// Sign a message using the user's wallet
 router.post('/wallet/signMessage', async (req, res) => {
     const { access_token } = req.headers;
+    const { message } = req.body;
+
     if (!access_token) {
         return res.status(400).json({ error: 'access_token in the header request is required' });
     }
 
-    const { message } = req.body;
     if (!message) {
-        return res.status(400).json({ error: 'message in the body request (raw) is required' });
+        return res.status(400).json({ error: 'message in the body request is required' });
     }
 
-    const { error, message: user } = await getUserWallet(access_token);
+    try {
+        const { error, wallet, message: userMessage } = await getUserWallet(access_token);
+        if (error) throw new Error(userMessage);
 
-    if (error) {
-        return res.status(400).json(user);
-    } else {
-
-        const signedMessage = await axios.request({
-            method: 'post',
-            url: process.env.THIRDWEB_URL + '/backend-wallet/sign-message',
-            headers: {
-                'x-backend-wallet-address': user.wallet,
-                'x-idempotency-key': '<string>',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': 'Bearer ' + process.env.THIRDWEB_BEARER_TOKEN,
-            },
-            data: {
-                "message": message,
-                "isBytes": false
+        const signedMessage = await axios.post(
+            `${process.env.THIRDWEB_URL}/backend-wallet/sign-message`,
+            { message, isBytes: false },
+            {
+                headers: {
+                    'x-backend-wallet-address': wallet,
+                    'x-idempotency-key': `dsigner_${wallet}_${new Date().getTime()}`,
+                    'Authorization': `Bearer ${process.env.THIRDWEB_BEARER_TOKEN}`,
+                    'Content-Type': 'application/json',
+                },
             }
-        })
+        );
 
-        return res.status(200).json({
-            signedMessage: signedMessage.data.result
-        });
+        res.status(200).json({ signedMessage: signedMessage.data.result });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
     }
-
-
 });
 
+// Initialize the Express app and apply middleware
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Apply CORS middleware
-app.use(cors());  // Use this line to enable CORS
+app.use(cors());  // Enable CORS
+app.use(express.json());  // Parse JSON request bodies
+app.use(router);  // Use the router with defined routes
 
-app.use(express.json());
-app.use(router);
-
+// Start the server
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
