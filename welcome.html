@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Verification</title>
+</head>
+<body>
+  <h1>Verifying your email...</h1>
+  <script>
+    window.addEventListener('DOMContentLoaded', (event) => {
+      const hash = window.location.hash;
+      const token = new URLSearchParams(hash.substring(1)).get('access_token');
+
+      if (token) {
+        console.log(token);
+        fetch('/auth/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ token })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            document.body.innerHTML = `<h1>Error: ${data.error}</h1>`;
+          } else {
+            document.body.innerHTML = `<h1>${data.message}</h1>`;
+          }
+        })
+        .catch(error => {
+          document.body.innerHTML = `<h1>Error: ${error.message}</h1>`;
+        });
+      } else {
+        document.body.innerHTML = '<h1>No access token found!</h1>';
+      }
+    });
+  </script>
+</body>
+</html>
