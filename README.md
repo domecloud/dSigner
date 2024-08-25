@@ -1,6 +1,6 @@
 # dSigner
 
-THIRDWEB + SUPABASE
+THIRDWEB + SUPABASE = Domecloud's Signer Service
 
 ## Test in Postman
 
