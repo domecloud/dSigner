@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dSigner - Example Usage</title>
+</head>
+
+<body>
+    <script src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js" type="application/javascript"></script>
+    <script src="dSigner.ethers.js" type="application/javascript"></script>
+
+    <script>
+        async function app(){
+            const provider = new ethers.providers.JsonRpcProvider('https://rpc-l1.jibchain.net');
+            const signer = new dSigner(provider);
+
+            await signer.signIn('earthchie@gmail.com', 'earth123');
+
+            const Token = new ethers.Contract('0x8ed251381C51B5B92D3fCe02F4D971b9aF6b180F', [
+                'function transfer(address to, uint256 value) external returns (bool)'
+            ], signer);
+
+            
+            const trx = await Token.transfer(signer.address, ethers.utils.parseUnits('100'));
+
+            await trx.wait()
+            console.log(trx);
+
+        }
+
+        //app(); // uncomment to see the result
+
+    </script>
+</body>
+
+</html>
