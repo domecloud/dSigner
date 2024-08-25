@@ -22,6 +22,7 @@ Create table as follows
 | email      | text       |                   |         | Is Unique              |
 | wallet     | text       |                   |         | Is Unique              |
 
+![image](https://github.com/user-attachments/assets/6095110b-d452-465f-bb9f-ca331f4bad4c)
 
 ### 2. Set Site URL
 
@@ -29,6 +30,7 @@ Navigate to `Authentication` > `URL Configuration`
 
 Then enter `{{baseURL}}/auth/welcome` in `Site URL`
 
+![image](https://github.com/user-attachments/assets/44244c94-c103-4600-973f-6e485b830332)
 
 ## Set-up this repo
 
