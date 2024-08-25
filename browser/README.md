@@ -51,8 +51,7 @@ await signer.setAccessToken('SUPABASE_JWT_TOKEN');
 ### Sign a Message
 
 ```javascript
-const provider = new ethers.providers.JsonRpcProvider('https://rpc-l1.jibchain.net');
-const signer = new dSigner(provider);
+const signer = new dSigner(); // Yes, you may not need provider to sign message
 
 await signer.setAccessToken('SUPABASE_JWT_TOKEN');
 
