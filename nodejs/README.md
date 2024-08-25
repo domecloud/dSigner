@@ -7,6 +7,7 @@
 
 ### Create a Signer Object
 ```javascript
+import { ethers } from "ethers";
 import dSigner from "./dSigner.ethers.node.js";
 const provider = new ethers.providers.JsonRpcProvider('https://rpc-l1.jibchain.net');
 const signer = new dSigner(provider);
