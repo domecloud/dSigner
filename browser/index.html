@@ -22,7 +22,6 @@
                 'function transfer(address to, uint256 value) external returns (bool)'
             ], signer);
 
-            
             const trx = await Token.transfer(signer.address, ethers.utils.parseUnits('100'));
 
             await trx.wait()

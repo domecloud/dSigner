@@ -1,6 +1,6 @@
 /**
  * @name dSigner.js
- * @version 1.0.2
+ * @version 1.0.3
  * @update AUG 26, 2024
  * @license MIT License
  * @author [DOMECLOUD] THANARAT KUAWATTANAPHAN <thanarat@dome.cloud>
@@ -17,7 +17,7 @@ class dSigner extends ethers.Signer {
         this.api_url = 'https://dsigner-api.project.in.th';
         if(arguments.length === 1){
             this.provider = config;
-        }else{
+        }else if(arguments.length === 2){
             this.api_url = config.api_url.replace(/\/$/, '');
             this.address = config.address || null;
             this.access_token = config.access_token || null;
