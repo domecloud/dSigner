@@ -1,10 +1,10 @@
 /**
  * @name dSigner.js
- * @version 1.0.3
- * @update AUG 26, 2024
+ * @version 1.0.4
+ * @update Sep 4, 2024
  * @license MIT License
  * @author [DOMECLOUD] THANARAT KUAWATTANAPHAN <thanarat@dome.cloud>
- * @dependencies ethers.js
+ * @dependencies ethers.js@5
  */
 import { ethers } from "ethers";
 
@@ -118,7 +118,8 @@ class dSigner extends ethers.Signer {
             ...populatedTx,
             nonce: ethers.utils.hexlify(populatedTx.nonce),
             gasLimit: ethers.utils.hexlify(populatedTx.gasLimit),
-            gasPrice: ethers.utils.hexlify(populatedTx.gasPrice),
+            maxFeePerGas: ethers.utils.hexlify(populatedTx.maxPriorityFeePerGas),
+            maxPriorityFeePerGas: ethers.utils.hexlify(populatedTx.maxPriorityFeePerGas),
             value: populatedTx.value ? ethers.utils.hexlify(populatedTx.value) : undefined
         };
 
